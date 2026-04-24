@@ -141,8 +141,15 @@ def safe_float(value, default=0.0):
     except Exception:
         return default
 
+def ensure_column(conn, table, column, column_type):
+    existing = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
+
 def db_connect():
     conn = sqlite3.connect(DB_PATH)
+
     conn.execute("CREATE TABLE IF NOT EXISTS snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, fetched_at TEXT NOT NULL, source TEXT, payload TEXT NOT NULL)")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS relay_events (
@@ -158,7 +165,20 @@ def db_connect():
             tour_total INTEGER, lap_time TEXT, lap_seconds REAL, relay_laps INTEGER
         )
     """)
-    conn.commit(); return conn
+
+    # Migration automatique pour les bases créées avec d'anciennes versions.
+    ensure_column(conn, "snapshots", "source", "TEXT")
+    ensure_column(conn, "relay_events", "categorie", "TEXT")
+    ensure_column(conn, "relay_events", "team", "TEXT")
+    ensure_column(conn, "relay_events", "pilote", "TEXT")
+    ensure_column(conn, "relay_events", "total_pit", "INTEGER")
+    ensure_column(conn, "lap_events", "categorie", "TEXT")
+    ensure_column(conn, "lap_events", "team", "TEXT")
+    ensure_column(conn, "lap_events", "pilote", "TEXT")
+    ensure_column(conn, "lap_events", "relay_laps", "INTEGER")
+
+    conn.commit()
+    return conn
 
 def save_snapshot_to_db(data, source):
     try:
