@@ -435,19 +435,67 @@ elif page=="Pilotes":
             with cards[i]:
                 name=driver.get("name",""); color=driver.get("color","#ffffff"); is_current=bool(current_rider and (name.lower() in current_rider.lower() or current_rider.lower() in name.lower()))
                 st.markdown(f"""<div style='border:1px solid #333;border-radius:12px;padding:14px;background:#111827;'><div style='font-size:20px;font-weight:700;'><span style='color:{color};'>●</span> {name}</div><div>Brassard : <b>{driver.get('armband','')}</b></div><div>Ordre : <b>{driver.get('order','')}</b></div><div>Statut : <b>{'EN RELAIS' if is_current else 'Disponible'}</b></div></div>""",unsafe_allow_html=True)
-    st.subheader("Statistiques pilotes"); summary=build_driver_summary(); st.dataframe(summary,use_container_width=True) if not summary.empty else st.info("Aucun tour pilote enregistré.")
+    st.subheader("Statistiques pilotes")
+    summary = build_driver_summary()
+    if summary.empty:
+        st.info("Aucun tour pilote enregistré.")
+    else:
+        st.dataframe(summary, use_container_width=True)
     if PLOTLY_OK:
         laps=load_lap_events(MY_BIKE)
         if not laps.empty:
             fig=px.line(laps,x="tour_total",y="lap_seconds",color="pilote",markers=True,title="Temps au tour par pilote"); fig.update_yaxes(title="Temps au tour (s)",autorange="reversed"); st.plotly_chart(fig,use_container_width=True)
 
 elif page=="Concurrents":
-    st.header("Concurrents - Relais et arrêts"); cat=st.selectbox("Catégorie à surveiller",["PRD","EWC","SST","EXP","ALL"],key="competitor_category"); st.subheader("Classement live filtré"); comp=df_live.copy(); comp=comp if cat=="ALL" else comp[comp["Cat"]==cat]; cols=["Pos.","Cat.P","No.","Cat","Team","Rider","Laps","L. Lap","Best Lap","Last Pit","Last Pit Time","Total Pit","Total pit time"]; st.dataframe(comp[[c for c in cols if c in comp.columns]],use_container_width=True,height=350); st.subheader("Nombre de tours par relais"); m=build_relay_matrix(cat); st.dataframe(m,use_container_width=True) if not m.empty else st.info("Aucun relais détecté."); st.subheader("Temps de chaque arrêt - Last Pit Time"); p=build_pit_time_matrix(cat); st.dataframe(p,use_container_width=True) if not p.empty else st.info("Aucun temps d'arrêt enregistré.")
+    st.header("Concurrents - Relais et arrêts")
+    cat = st.selectbox("Catégorie à surveiller", ["PRD", "EWC", "SST", "EXP", "ALL"], key="competitor_category")
+
+    st.subheader("Classement live filtré")
+    comp = df_live.copy()
+    if not comp.empty:
+        if cat != "ALL":
+            comp = comp[comp["Cat"] == cat]
+        cols = ["Pos.", "Cat.P", "No.", "Cat", "Team", "Rider", "Laps", "L. Lap", "Best Lap", "Last Pit", "Last Pit Time", "Total Pit", "Total pit time"]
+        cols = [c for c in cols if c in comp.columns]
+        st.dataframe(comp[cols], use_container_width=True, height=350)
+    else:
+        st.info("Aucune donnée live disponible.")
+
+    st.subheader("Nombre de tours par relais")
+    m = build_relay_matrix(cat)
+    if m.empty:
+        st.info("Aucun relais détecté.")
+    else:
+        st.dataframe(m, use_container_width=True)
+
+    st.subheader("Temps de chaque arrêt - Last Pit Time")
+    p = build_pit_time_matrix(cat)
+    if p.empty:
+        st.info("Aucun temps d’arrêt enregistré.")
+    else:
+        st.dataframe(p, use_container_width=True)
 
 elif page=="Détail concurrent":
     st.header("Détail concurrent"); opts=df_live[df_live["No."].astype(str)!=MY_BIKE]["No."].astype(str).tolist() if not df_live.empty else []
     if opts:
-        selected=st.selectbox("Concurrent",opts); row=get_current_bike_row(df_live,selected); st.dataframe(pd.DataFrame([row]),use_container_width=True) if row is not None else None; rel=load_relay_events(); st.subheader("Relais"); st.dataframe(rel[rel["numero"].astype(str)==str(selected)] if not rel.empty else pd.DataFrame(),use_container_width=True); st.subheader("Stats tours"); stats=lap_stats_for_bike(selected); st.json({k:seconds_to_laptime(v) if k in ["best","avg","median","pace5","recent10"] else v for k,v in stats.items()}); laps=load_lap_events(selected)
+        selected = st.selectbox("Concurrent", opts)
+        row = get_current_bike_row(df_live, selected)
+        if row is not None:
+            st.dataframe(pd.DataFrame([row]), use_container_width=True)
+
+        rel = load_relay_events()
+        st.subheader("Relais")
+        if rel.empty:
+            st.info("Aucun relais enregistré.")
+        else:
+            st.dataframe(rel[rel["numero"].astype(str) == str(selected)], use_container_width=True)
+
+        st.subheader("Stats tours")
+        stats = lap_stats_for_bike(selected)
+        pretty_stats = {k: seconds_to_laptime(v) if k in ["best", "avg", "median", "pace5", "recent10"] else v for k, v in stats.items()}
+        st.json(pretty_stats)
+
+        laps = load_lap_events(selected)
         if PLOTLY_OK and not laps.empty:
             fig=px.line(laps,x="tour_total",y="lap_seconds",color="pilote",markers=True,title=f"Temps au tour #{selected}"); fig.update_yaxes(autorange="reversed"); st.plotly_chart(fig,use_container_width=True)
     else: st.info("Aucun concurrent disponible.")
